@@ -1,0 +1,20 @@
+configure_option "--with-curl"
+configure_option "--with-password-argon2"
+configure_option "--with-pdo-pgsql"
+configure_option "--with-pdo-mysql"
+configure_option "--with-libedit"
+configure_option "--with-sodium"
+
+configure_option "--enable-gd"
+configure_option "--with-jpeg"
+configure_option "--with-zip"
+
+PHP_BUILD_EXTRA_MAKE_ARGUMENTS="-j4"
+
+#https://github.com/php-build/php-build/blob/master/share/php-build/definitions/7.4.33
+#Don't change beyond this line
+
+install_package "https://secure.php.net/distributions/php-7.4.33.tar.bz2"
+install_xdebug "3.1.6"
+enable_builtin_opcache
+

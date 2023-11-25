@@ -21,9 +21,7 @@ RUN set -ex \
     && ssh-keyscan -t rsa,dsa -H github.com >> ~/.ssh/known_hosts \
     && ssh-keyscan -t rsa,dsa -H bitbucket.org >> ~/.ssh/known_hosts \
     && chmod 600 ~/.ssh/known_hosts \
-    && yum install -yq $EPEL_REPO \
-    && rpm --import https://download.mono-project.com/repo/xamarin.gpg \
-    && curl https://download.mono-project.com/repo/centos7-stable.repo | tee /etc/yum.repos.d/mono-centos7-stable.repo \
+#    && yum install -y -v $EPEL_REPO \
     && amazon-linux-extras enable corretto8 \
     && amazon-linux-extras enable docker \
     && yum groupinstall -yq "Development tools" \
@@ -39,7 +37,7 @@ RUN set -ex \
            perl-DBI perl-HTTP-Date perl-IO-Pty-Easy perl-TimeDate perl-YAML-LibYAML \
            postgresql-devel procps-ng python-configobj readline-devel rsync sgml-common \
            subversion-perl tar tcl tk vim wget which xfsprogs xmlto xorg-x11-server-Xvfb xz-devel \
-           amazon-ecr-credential-helper
+           amazon-ecr-credential-helper libsodium-devel
 
 RUN useradd codebuild-user
 
@@ -49,7 +47,7 @@ FROM core AS tools
 
 # Install Git
 RUN set -ex \
-   && GIT_VERSION=2.27.0 \
+   && GIT_VERSION=2.42.0 \
    && GIT_TAR_FILE=git-$GIT_VERSION.tar.gz \
    && GIT_SRC=https://github.com/git/git/archive/v${GIT_VERSION}.tar.gz  \
    && curl -L -o $GIT_TAR_FILE $GIT_SRC \
@@ -62,9 +60,9 @@ RUN set -ex \
 
 # Install stunnel
 RUN set -ex \
-   && STUNNEL_VERSION=5.56 \
+   && STUNNEL_VERSION=5.71 \
    && STUNNEL_TAR=stunnel-$STUNNEL_VERSION.tar.gz \
-   && STUNNEL_SHA256="7384bfb356b9a89ddfee70b5ca494d187605bb516b4fff597e167f97e2236b22" \
+   && STUNNEL_SHA256="3086939ee6407516c59b0ba3fbf555338f9d52f459bcab6337c0f00e91ea8456" \
    && curl -o $STUNNEL_TAR https://www.usenix.org.uk/mirrors/stunnel/archive/5.x/$STUNNEL_TAR \
    && echo "$STUNNEL_SHA256 $STUNNEL_TAR" | sha256sum -c - \
    && tar xvfz $STUNNEL_TAR \
@@ -86,19 +84,13 @@ RUN curl -sS -o /usr/local/bin/aws-iam-authenticator https://amazon-eks.s3.us-we
 
 # Configure SSM
 RUN set -ex \
-    && yum install -yq https://s3.amazonaws.com/amazon-ssm-us-east-1/3.0.1390.0/linux_arm64/amazon-ssm-agent.rpm
-
-# Install env tools for runtimes
-## Dotnet
-ENV PATH="/root/.dotnet/:/root/.dotnet/tools/:$PATH"
-RUN set -ex  \
-&& wget -qO /usr/local/bin/dotnet-install.sh https://dot.net/v1/dotnet-install.sh \
-&& chmod +x /usr/local/bin/dotnet-install.sh
+    && yum install -yq https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/linux_arm64/amazon-ssm-agent.rpm
 
 ##nodejs
 ENV N_SRC_DIR="$SRC_DIR/n"
 RUN git clone https://github.com/tj/n $N_SRC_DIR \
      && cd $N_SRC_DIR && make install
+ENV PATH="/usr/local/bin:$PATH"
 
 ##ruby
 ENV RBENV_SRC_DIR="/usr/local/rbenv"
@@ -122,7 +114,29 @@ ENV PATH="/root/.phpenv/shims:/root/.phpenv/bin:$PATH"
 
 #=======================End of layer: tools  =================
 
-FROM tools AS runtimes_1
+#===================START of layer: ==============
+FROM tools AS sqlite
+RUN set -ex \
+    && SQLITE_VERSION=3430100 \
+    && curl -o sqlite-autoconf-${SQLITE_VERSION}.tar.gz https://sqlite.org/2023/sqlite-autoconf-${SQLITE_VERSION}.tar.gz \
+    && tar -xzvf ${SQLITE_VERSION}.tar.gz \
+    && cd sqlite-autoconf-${SQLITE_VERSION} \
+    && ./configure \
+    && make \
+    && make install \
+    && cd .. ; rm -rf sqlite-autoconf-${SQLITE_VERSION}*
+#=======================End of layer: sqlite  =================
+
+#===================START of layer: minio==============
+FROM sqlite AS minio
+RUN set -ex \
+    && curl -o minio.rpm https://dl.min.io/server/minio/release/linux-arm64/archive/minio-20231007150738.0.0.aarch64.rpm \
+    && yum localinstall -yq minio.rpm \
+    && systemctl enable minio.service
+#=======================End of layer: minio  =================
+
+#===================START of layer: runtimes_java==============
+FROM minio AS runtimes_java
 
 #****************      JAVA     ****************************************************
 ENV JAVA_11_HOME="/usr/lib/jvm/java-11-amazon-corretto.aarch64" \
@@ -133,13 +147,13 @@ ENV JAVA_11_HOME="/usr/lib/jvm/java-11-amazon-corretto.aarch64" \
     JRE_8_HOME="/usr/lib/jvm/java-1.8.0-amazon-corretto.aarch64/jre" \
     ANT_VERSION=1.10.8 \
     MAVEN_HOME="/opt/maven" \
-    MAVEN_VERSION=3.6.3 \
+    MAVEN_VERSION=3.9.5 \
     INSTALLED_GRADLE_VERSIONS="5.6.4 6.5" \
     GRADLE_VERSION=6.5 \
     SBT_VERSION=1.3.13 \
     GRADLE_PATH="$SRC_DIR/gradle" \
     ANT_DOWNLOAD_SHA512="4d80dc6ba23eeec7769085ddb00261b7480b596b56c6e69aa221391acbfb7338eb5855179c88222c8021095ef1f64f43caf2b4f90e8305d7c3128026d4258d06" \
-    MAVEN_DOWNLOAD_SHA512="c35a1803a6e70a126e80b2b3ae33eed961f83ed74d18fcd16909b2d44d7dada3203f1ffe726c17ef8dcca2dcaa9fca676987befeadc9b9f759967a8cb77181c0" \
+    MAVEN_DOWNLOAD_SHA512="4810523ba025104106567d8a15a8aa19db35068c8c8be19e30b219a1d7e83bcab96124bf86dc424b1cd3c5edba25d69ec0b31751c136f88975d15406cab3842b" \
     GRADLE_DOWNLOADS_SHA256="c9910513d0eed63cd8f5c7fec4cb4a05731144770104a0871234a4edc3ba3cef 6.5\nabc10bcedb58806e8654210f96031db541bcd2d6fc3161e81cb0572d6a15e821 5.6.4" \
     SBT_DOWNLOAD_SHA256="854154de27a7d8c13b5a0f9a297cd1f254cc13b44588dae507e5d4fb2741bd22"
 
@@ -208,127 +222,67 @@ RUN sbt version
 RUN rm -fr /tmp/* /var/tmp/* \
     && yum clean all
 #****************     END JAVA     ****************************************************
+#===================END of layer: runtimes_java==============
 
-
-#****************     PowerShell     *******************************************************
-
-# Install Powershell Core
-ENV POWERSHELL_VERSION 7.0.2
-ENV POWERSHELL_DOWNLOAD_URL https://github.com/PowerShell/PowerShell/releases/download/v$POWERSHELL_VERSION/powershell-$POWERSHELL_VERSION-linux-arm64.tar.gz
-ENV POWERSHELL_DOWNLOAD_SHA 8677301996b5335b872d267d41f588c145eeffa6b9736962530480b4d15cc295
-
-RUN set -ex \
-    && curl -SL $POWERSHELL_DOWNLOAD_URL --output powershell.tar.gz \
-    && echo "$POWERSHELL_DOWNLOAD_SHA powershell.tar.gz" | sha256sum -c - \
-    && mkdir -p /opt/microsoft/powershell/$POWERSHELL_VERSION \
-    && tar zxf powershell.tar.gz -C /opt/microsoft/powershell/$POWERSHELL_VERSION \
-    && rm powershell.tar.gz \
-    && ln -s /opt/microsoft/powershell/$POWERSHELL_VERSION/pwsh /usr/bin/pwsh
-#****************     END Powershell     *******************************************************
-
-
-
-#****************      NODEJS     ****************************************************
-
-ENV NODE_10_VERSION="10.24.1"
-
-RUN  n $NODE_10_VERSION && npm install --save-dev -g -f grunt && npm install --save-dev -g -f grunt-cli && npm install --save-dev -g -f webpack \
-     && curl -sSL https://dl.yarnpkg.com/rpm/yarn.repo | tee /etc/yum.repos.d/yarn.repo \
-     && rpm --import https://dl.yarnpkg.com/rpm/pubkey.gpg \
-     && yum install -yq yarn \
-     && yarn --version \
-     && cd / && rm -rf $N_SRC_DIR; rm -rf /tmp/*
-
-#****************      END NODEJS     ****************************************************
+#===================START of layer: runtimes_ruby==============
+FROM runtimes_java AS runtimes_ruby
 
 #**************** RUBY *********************************************************
 
-ENV RUBY_26_VERSION="2.6.6"
-
-RUN rbenv install $RUBY_26_VERSION; rm -rf /tmp/*; rbenv global $RUBY_26_VERSION;ruby -v
+ENV RUBY_32_VERSION="3.2.2"
+RUN rbenv install $RUBY_32_VERSION; rm -rf /tmp/*; rbenv global $RUBY_32_VERSION;ruby -v
 
 #**************** END RUBY *****************************************************
 
+#===================END of layer: runtimes_ruby==============
+
+#===================START of layer: runtimes_openssl==============
+FROM runtimes_ruby AS openssl
+
+RUN which openssl
+RUN set -ex \
+    && curl -fSL "https://www.openssl.org/source/openssl-3.1.3.tar.gz" -o openssl-3.1.3.tar.gz \
+    && echo "f0316a2ebd89e7f2352976445458689f80302093788c466692fb2a188b2eacf6 openssl-3.1.3.tar.gz" | sha256sum -c - \
+    && mkdir /tmp/openssl \
+    && yum -y install perl-IPC-Cmd \
+    && tar --extract --file openssl-3.1.3.tar.gz --strip-components 1  --directory /tmp/openssl \
+    && cd /tmp/openssl \
+    && ./Configure \
+    && make \
+    && make install
+
+#===================END of layer: runtimes_openssl==============
+
+#===================START of layer: runtimes_python==============
+FROM openssl AS runtimes_python
+
 #**************** PYTHON *****************************************************
-ENV PYTHON_37_VERSION="3.7.10"
 ENV PYTHON_PIP_VERSION=21.1.2
 ENV PYYAML_VERSION=5.4.1
 ENV DOCKER_COMPOSE_VERSION="1.26.0"
 
-COPY tools/runtime_configs/python/$PYTHON_37_VERSION /root/.pyenv/plugins/python-build/share/python-build/$PYTHON_37_VERSION
-RUN   env PYTHON_CONFIGURE_OPTS="--enable-shared" pyenv install $PYTHON_37_VERSION; rm -rf /tmp/*
-RUN   pyenv global  $PYTHON_37_VERSION
+#Python 3.9
+ENV PYTHON_39_VERSION="3.12.0"
+
+COPY tools/runtime_configs/python/$PYTHON_39_VERSION /root/.pyenv/plugins/python-build/share/python-build/$PYTHON_39_VERSION
+RUN cat /root/.pyenv/./plugins/python-build/share/python-build/$PYTHON_39_VERSION
+RUN openssl version
+RUN env PYTHON_CONFIGURE_OPTS="--enable-shared --enable-shared --enable-loadable-sqlite-extensions" pyenv install $PYTHON_39_VERSION; rm -rf /tmp/*
+RUN pyenv versions
+RUN pyenv global $PYTHON_39_VERSION
 RUN set -ex \
     && pip3 install --no-cache-dir --upgrade --force-reinstall "pip==$PYTHON_PIP_VERSION" \
     && pip3 install --no-cache-dir --upgrade "PyYAML==$PYYAML_VERSION" \
     && pip3 install --no-cache-dir --upgrade 'setuptools==57.4.0' wheel aws-sam-cli awscli boto3 pipenv virtualenv \
     && pip3 install --no-cache-dir "docker-compose==$DOCKER_COMPOSE_VERSION" \
-    && docker-compose version
+    && docker-compose version    
 
 #**************** END PYTHON *****************************************************
 
-#****************      PHP     ****************************************************
-ENV PHP_73_VERSION="7.3.19"
+#===================END of layer: runtimes_python==============
 
-COPY tools/runtime_configs/php/$PHP_73_VERSION /root/.phpenv/plugins/php-build/share/php-build/definitions/$PHP_73_VERSION
-RUN phpenv install $PHP_73_VERSION; rm -rf /tmp/*; phpenv global $PHP_73_VERSION
-RUN echo "memory_limit = 1G;" >> "/root/.phpenv/versions/$PHP_73_VERSION/etc/conf.d/memory.ini"
-
-# Install Composer globally
-RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/bin --filename=composer
-#****************      END PHP     ****************************************************
-
-#****************     GOLANG     ****************************************************
-ENV GOPATH="/go" \
-    DEP_VERSION="0.5.4" \
-    DEP_BINARY="dep-linux-arm64"
-
-ENV GOLANG_14_VERSION="1.14.7"
-ENV GOLANG_14_DOWNLOAD_SHA256="fe5b6f6e441f3cb7b53ebf1a010bbebcb720ac98124984cfe2e51d72b8a58c71"
-
-RUN set -ex \
-    && mkdir -p "$GOPATH/src" "$GOPATH/bin" \
-    && chmod -R 777 "$GOPATH" \
-    && wget -q "https://dl.google.com/go/go$GOLANG_14_VERSION.linux-arm64.tar.gz" -O /tmp/golang.tar.gz \
-    && echo "$GOLANG_14_DOWNLOAD_SHA256 /tmp/golang.tar.gz" | sha256sum -c - \
-    && tar -xzf /tmp/golang.tar.gz -C /tmp \
-    && mv /tmp/go /usr/local/go14  \
-    && rm -fr /tmp/* /var/tmp/* \
-    && wget -q "https://github.com/golang/dep/releases/download/v$DEP_VERSION/$DEP_BINARY" -O "$GOPATH/bin/dep" \
-    && chmod +x "$GOPATH/bin/dep"
-
-RUN ln -s /usr/local/go14 /usr/local/go
-ENV PATH="$GOPATH/bin:/usr/local/go/bin:$PATH"
-
-#****************     GO 1.13   **********************************************************
-
-ENV GOLANG_13_VERSION="1.13.15"
-ENV GOLANG_13_DOWNLOAD_SHA256="a5c59e3f0aeaf6e939790152a8bfabb91d70c9787afb7aee06aef9bd4411c551"
-
-RUN set -ex \
-    && wget -q "https://dl.google.com/go/go$GOLANG_13_VERSION.linux-arm64.tar.gz" -O /tmp/golang.tar.gz \
-    && echo "$GOLANG_13_DOWNLOAD_SHA256 /tmp/golang.tar.gz" | sha256sum -c - \
-    && tar -xzf /tmp/golang.tar.gz -C /tmp \
-    && mv /tmp/go /usr/local/go13  \
-    && rm -fr /tmp/* /var/tmp/*
-
-#***************    GO 1.12   *************************************************
-
-ENV GOLANG_12_VERSION="1.12.17"
-ENV GOLANG_12_DOWNLOAD_SHA256="9d0819cce1451abdb090071880fe8771f16a3bcee71d6f6906023d17799574e2"
-
-RUN set -ex \
-    && wget -q "https://dl.google.com/go/go$GOLANG_12_VERSION.linux-arm64.tar.gz" -O /tmp/golang.tar.gz \
-    && echo "$GOLANG_12_DOWNLOAD_SHA256 /tmp/golang.tar.gz" | sha256sum -c - \
-    && tar -xzf /tmp/golang.tar.gz -C /tmp \
-    && mv /tmp/go /usr/local/go12  \
-    && rm -fr /var/lib/apt/lists/* /tmp/* /var/tmp/*
-
-#****************      END GOLANG     ****************************************************
-
-
-#=======================End of layer: runtimes_1  =================
-FROM runtimes_1 AS runtimes_2
+#===================START of layer: runtimes_docker==============
+FROM runtimes_python AS runtimes_docker
 
 #Docker 19
 ENV DOCKER_BUCKET="download.docker.com" \
@@ -355,76 +309,54 @@ RUN set -ex \
     && wget -q "https://raw.githubusercontent.com/docker/docker/${DIND_COMMIT}/hack/dind" -O /usr/local/bin/dind \
     && chmod +x /usr/local/bin/dind
 
-#Python 3.8
-ENV PYTHON_38_VERSION="3.8.10"
+#===================END of layer: runtimes_docker==============
 
-COPY tools/runtime_configs/python/$PYTHON_38_VERSION /root/.pyenv/plugins/python-build/share/python-build/$PYTHON_38_VERSION
-RUN   env PYTHON_CONFIGURE_OPTS="--enable-shared" pyenv install $PYTHON_38_VERSION; rm -rf /tmp/*
-RUN   pyenv global  $PYTHON_38_VERSION
-RUN set -ex \
-    && pip3 install --no-cache-dir --upgrade --force-reinstall "pip==$PYTHON_PIP_VERSION" \
-    && pip3 install --no-cache-dir --upgrade "PyYAML==$PYYAML_VERSION" \
-    && pip3 install --no-cache-dir --upgrade 'setuptools==57.4.0' wheel aws-sam-cli awscli boto3 pipenv virtualenv \
-    && pip3 install --no-cache-dir "docker-compose==$DOCKER_COMPOSE_VERSION" \
-    && docker-compose version
+#===================START of layer: runtimes_nodejs==============
+FROM runtimes_docker AS runtimes_nodejs
 
-#Python 3.9
-ENV PYTHON_39_VERSION="3.9.5"
+# Node 16
+ENV NODE_16_VERSION="16.20.2"
 
-COPY tools/runtime_configs/python/$PYTHON_39_VERSION /root/.pyenv/plugins/python-build/share/python-build/$PYTHON_39_VERSION
-RUN   env PYTHON_CONFIGURE_OPTS="--enable-shared" pyenv install $PYTHON_39_VERSION; rm -rf /tmp/*
-RUN   pyenv global  $PYTHON_39_VERSION
-RUN set -ex \
-    && pip3 install --no-cache-dir --upgrade --force-reinstall "pip==$PYTHON_PIP_VERSION" \
-    && pip3 install --no-cache-dir --upgrade "PyYAML==$PYYAML_VERSION" \
-    && pip3 install --no-cache-dir --upgrade 'setuptools==57.4.0' wheel aws-sam-cli awscli boto3 pipenv virtualenv \
-    && pip3 install --no-cache-dir "docker-compose==$DOCKER_COMPOSE_VERSION" \
-    && docker-compose version
-
-# Node 12
-ENV NODE_12_VERSION="12.22.2"
-
-RUN  n $NODE_12_VERSION && npm install --save-dev -g -f grunt && npm install --save-dev -g -f grunt-cli && npm install --save-dev -g -f webpack \
+RUN n $NODE_16_VERSION && npm install --save-dev -g -f grunt && npm install --save-dev -g -f grunt-cli && npm install --save-dev -g -f webpack \
      && rm -rf /tmp/*
 
-#=======================End of layer: runtimes_2  =================
-FROM runtimes_2 AS runtimes_3
+# Node 18
+ENV NODE_18_VERSION="18.18.2"
 
-#DotNet 3.1
-ENV DOTNET_31_SDK_VERSION="3.1.301"
-ENV DOTNET_ROOT="/root/.dotnet"
+RUN n $NODE_18_VERSION && npm install --save-dev -g -f grunt && npm install --save-dev -g -f grunt-cli && npm install --save-dev -g -f webpack \
+     && rm -rf /tmp/*
 
-RUN /usr/local/bin/dotnet-install.sh -v $DOTNET_31_SDK_VERSION \
-    && dotnet --list-sdks \
-    && rm -rf /tmp/*
+# Node 20
+ENV NODE_20_VERSION="20.9.0"
 
-## Trigger the population of the local package cache
-ENV DOTNET_SYSTEM_GLOBALIZATION_INVARIANT true
-ENV NUGET_XMLDOC_MODE skip
-RUN set -ex \
-    && mkdir warmup \
-    && cd warmup \
-    && dotnet new \
-    && cd .. \
-    && rm -rf warmup \
-    && rm -rf /tmp/NuGetScratch
+RUN n $NODE_18_VERSION && npm install --save-dev -g -f grunt && npm install --save-dev -g -f grunt-cli && npm install --save-dev -g -f webpack \
+     && rm -rf /tmp/*
 
-#Ruby 2.7
-ENV RUBY_27_VERSION="2.7.1"
-RUN rbenv install $RUBY_27_VERSION; rm -rf /tmp/*; rbenv global $RUBY_27_VERSION;ruby -v
+#===================END of runtimes_nodejs==============
 
-#Php 7.4
-ENV PHP_74_VERSION="7.4.7"
-COPY tools/runtime_configs/php/$PHP_74_VERSION /root/.phpenv/plugins/php-build/share/php-build/definitions/$PHP_74_VERSION
-RUN phpenv install $PHP_74_VERSION; rm -rf /tmp/*; phpenv global $PHP_74_VERSION
-RUN echo "memory_limit = 1G;" >> "/root/.phpenv/versions/$PHP_74_VERSION/etc/conf.d/memory.ini"
+#===================START of runtimes_php==============
+FROM runtimes_nodejs AS runtimes_php
+
+#****************      PHP     ****************************************************
+ENV PHP_82_VERSION="8.3.0"
+
+COPY tools/runtime_configs/php/$PHP_83_VERSION /root/.phpenv/plugins/php-build/share/php-build/definitions/$PHP_83_VERSION
+RUN phpenv install $PHP_83_VERSION; phpenv rehash; rm -rf /tmp/*
+RUN echo "memory_limit = 1G;" >> "/root/.phpenv/versions/$PHP_83_VERSION/etc/conf.d/memory.ini"
+
+# PHP 8.2
+ENV PHP_82_VERSION="8.2.13"
+
+COPY tools/runtime_configs/php/$PHP_82_VERSION /root/.phpenv/plugins/php-build/share/php-build/definitions/$PHP_82_VERSION
+RUN phpenv install $PHP_82_VERSION; phpenv rehash; rm -rf /tmp/*
+RUN echo "memory_limit = 1G;" >> "/root/.phpenv/versions/$PHP_82_VERSION/etc/conf.d/memory.ini"
 
 # Install Composer globally
-RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/bin --filename=composer
+RUN curl -sS https://getcomposer.org/installer | ~/.phpenv/versions/$PHP_82_VERSION/bin/php -- --install-dir=/usr/bin --filename=composer
 #****************      END PHP     ****************************************************
+#===================END of runtimes_php==============
 
-#===================END of runtimes_3 ==============
-FROM runtimes_3 AS aarch64_v2
+FROM runtimes_php AS aarch64_v2
 
 # Configure SSH
 COPY ssh_config /root/.ssh/config

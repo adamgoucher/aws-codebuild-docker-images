@@ -1,0 +1,89 @@
+#0 building with "elastic_elion" instance using docker-container driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 16.62kB 0.0s done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for public.ecr.aws/amazonlinux/amazonlinux:2
+#2 DONE 0.9s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 2B done
+#3 DONE 0.0s
+
+#4 [internal] load build context
+#4 transferring context: 1.71kB 0.0s done
+#4 DONE 0.0s
+
+#5 [core 1/3] FROM public.ecr.aws/amazonlinux/amazonlinux:2@sha256:f09c0c66d64604b7a7f890c3f67f2cb8cf0f0999832e57afb0e1aec3dca80884
+#5 resolve public.ecr.aws/amazonlinux/amazonlinux:2@sha256:f09c0c66d64604b7a7f890c3f67f2cb8cf0f0999832e57afb0e1aec3dca80884 0.0s done
+#5 DONE 0.0s
+
+#6 [tools 6/8] RUN set -ex     && git clone https://github.com/rbenv/rbenv.git /usr/local/rbenv     && mkdir -p /usr/local/rbenv/plugins     && git clone https://github.com/rbenv/ruby-build.git /usr/local/rbenv/plugins/ruby-build     && sh /usr/local/rbenv/plugins/ruby-build/install.sh
+#6 CACHED
+
+#7 [runtimes_java 1/5] RUN set -ex     && yum install -yq java-1.8.0-amazon-corretto-devel     && update-ca-trust
+#7 CACHED
+
+#8 [sqlite 1/1] RUN set -ex     && SQLITE_VERSION=3430100     && curl -o sqlite-autoconf-${SQLITE_VERSION}.tar.gz https://sqlite.org/2023/sqlite-autoconf-${SQLITE_VERSION}.tar.gz     && tar -xzvf ${SQLITE_VERSION}.tar.gz     && cd sqlite-autoconf-${SQLITE_VERSION}     && ./configure     && make     && make install     && cd .. ; rm -rf sqlite-autoconf-${SQLITE_VERSION}*
+#8 CACHED
+
+#9 [runtimes_java 3/5] RUN set -ex     && mkdir -p /opt/maven     && curl -LSso /var/tmp/apache-maven-3.9.5-bin.tar.gz https://apache.org/dist/maven/maven-3/3.9.5/binaries/apache-maven-3.9.5-bin.tar.gz     && echo "4810523ba025104106567d8a15a8aa19db35068c8c8be19e30b219a1d7e83bcab96124bf86dc424b1cd3c5edba25d69ec0b31751c136f88975d15406cab3842b /var/tmp/apache-maven-3.9.5-bin.tar.gz" | sha512sum -c -     && tar xzvf /var/tmp/apache-maven-3.9.5-bin.tar.gz -C /opt/maven --strip-components=1     && rm /var/tmp/apache-maven-3.9.5-bin.tar.gz     && update-alternatives --install /usr/bin/mvn mvn /opt/maven/bin/mvn 10000     && mkdir -p /root/.m2     && mkdir -p /gradle     && for version in 5.6.4 6.5; do {        wget -q "https://services.gradle.org/distributions/gradle-$version-all.zip" -O "/gradle/gradle-$version-all.zip"        && unzip -q "/gradle/gradle-$version-all.zip" -d /usr/local        && echo -e "c9910513d0eed63cd8f5c7fec4cb4a05731144770104a0871234a4edc3ba3cef 6.5\nabc10bcedb58806e8654210f96031db541bcd2d6fc3161e81cb0572d6a15e821 5.6.4" | grep "$version" | sed "s|$version|/gradle/gradle-$version-all.zip|" | sha256sum -c -        && rm "/gradle/gradle-$version-all.zip"        && mkdir "/tmp/gradle-$version"        && "/usr/local/gradle-$version/bin/gradle" -p "/tmp/gradle-$version" wrapper        && perl -pi -e "s/gradle-$version-bin.zip/gradle-$version-all.zip/" "/tmp/gradle-$version/gradle/wrapper/gradle-wrapper.properties"        && "/tmp/gradle-$version/gradlew" -p "/tmp/gradle-$version" init        && rm -rf "/tmp/gradle-$version"        && if [ "$version" != "6.5" ]; then rm -rf "/usr/local/gradle-$version"; fi;      }; done     && ln -s /usr/local/gradle-6.5/bin/gradle /usr/bin/gradle     && rm -rf /gradle     && curl -fSL "https://github.com/sbt/sbt/releases/download/v1.3.13/sbt-1.3.13.tgz" -o sbt.tgz     && echo "854154de27a7d8c13b5a0f9a297cd1f254cc13b44588dae507e5d4fb2741bd22 *sbt.tgz" | sha256sum -c -     && tar xzf sbt.tgz -C /usr/local/bin/     && rm sbt.tgz
+#9 CACHED
+
+#10 [tools 8/8] RUN curl -L https://raw.githubusercontent.com/phpenv/phpenv-installer/master/bin/phpenv-installer | bash
+#10 CACHED
+
+#11 [minio 1/1] RUN set -ex     && curl -o minio.rpm https://dl.min.io/server/minio/release/linux-arm64/archive/minio-20231007150738.0.0.aarch64.rpm     && yum localinstall -yq minio.rpm     && systemctl enable minio.service
+#11 CACHED
+
+#12 [core 3/3] RUN useradd codebuild-user
+#12 CACHED
+
+#13 [runtimes_ruby 1/1] RUN rbenv install 3.2.2; rm -rf /tmp/*; rbenv global 3.2.2;ruby -v
+#13 CACHED
+
+#14 [tools 7/8] RUN curl https://pyenv.run | bash
+#14 CACHED
+
+#15 [core 2/3] RUN set -ex     && yum install -yq openssh-clients     && mkdir ~/.ssh     && touch ~/.ssh/known_hosts     && ssh-keyscan -t rsa,dsa -H github.com >> ~/.ssh/known_hosts     && ssh-keyscan -t rsa,dsa -H bitbucket.org >> ~/.ssh/known_hosts     && chmod 600 ~/.ssh/known_hosts     && amazon-linux-extras enable corretto8     && amazon-linux-extras enable docker     && yum groupinstall -yq "Development tools"     && yum install -yq            GeoIP-devel ImageMagick asciidoc bzip2-devel bzr bzrtools cvs cvsps            docbook-dtds docbook-style-xsl dpkg-dev e2fsprogs expat-devel expect fakeroot            glib2-devel groff gzip icu iptables jq krb5-server libargon2-devel            libcurl-devel libdb-devel libedit-devel libevent-devel libffi-devel            libicu-devel libjpeg-devel libpng-devel libserf libsqlite3x-devel            libtidy-devel libunwind libwebp-devel libxml2-devel libxslt libxslt-devel            libyaml-devel libzip-devel mariadb-devel mlocate            ncurses-devel oniguruma-devel openssl openssl-devel perl-DBD-SQLite            perl-DBI perl-HTTP-Date perl-IO-Pty-Easy perl-TimeDate perl-YAML-LibYAML            postgresql-devel procps-ng python-configobj readline-devel rsync sgml-common            subversion-perl tar tcl tk vim wget which xfsprogs xmlto xorg-x11-server-Xvfb xz-devel            amazon-ecr-credential-helper libsodium-devel
+#15 CACHED
+
+#16 [tools 4/8] RUN set -ex     && yum install -yq https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/linux_arm64/amazon-ssm-agent.rpm
+#16 CACHED
+
+#17 [runtimes_java 4/5] RUN sbt version
+#17 CACHED
+
+#18 [tools 3/8] RUN curl -sS -o /usr/local/bin/aws-iam-authenticator https://amazon-eks.s3.us-west-2.amazonaws.com/1.16.8/2020-04-16/bin/linux/arm64/aws-iam-authenticator     && curl -sS -o /usr/local/bin/kubectl https://amazon-eks.s3.us-west-2.amazonaws.com/1.16.8/2020-04-16/bin/linux/arm64/kubectl     && curl -sS -o /usr/local/bin/ecs-cli https://amazon-ecs-cli.s3.amazonaws.com/ecs-cli-linux-arm64-latest     && chmod +x /usr/local/bin/kubectl /usr/local/bin/aws-iam-authenticator /usr/local/bin/ecs-cli
+#18 CACHED
+
+#19 [tools 5/8] RUN git clone https://github.com/tj/n /n      && cd /n && make install
+#19 CACHED
+
+#20 [tools 2/8] RUN set -ex    && STUNNEL_VERSION=5.71    && STUNNEL_TAR=stunnel-$STUNNEL_VERSION.tar.gz    && STUNNEL_SHA256="3086939ee6407516c59b0ba3fbf555338f9d52f459bcab6337c0f00e91ea8456"    && curl -o $STUNNEL_TAR https://www.usenix.org.uk/mirrors/stunnel/archive/5.x/$STUNNEL_TAR    && echo "$STUNNEL_SHA256 $STUNNEL_TAR" | sha256sum -c -    && tar xvfz $STUNNEL_TAR    && cd stunnel-$STUNNEL_VERSION    && ./configure    && make -j4    && make install    && openssl genrsa -out key.pem 2048    && openssl req -new -x509 -key key.pem -out cert.pem -days 1095 -subj "/C=US/ST=Washington/L=Seattle/O=Amazon/OU=Codebuild/CN=codebuild.amazon.com"    && cat key.pem cert.pem >> /usr/local/etc/stunnel/stunnel.pem    && cd .. ; rm -rf stunnel-${STUNNEL_VERSION}*
+#20 CACHED
+
+#21 [runtimes_java 5/5] RUN rm -fr /tmp/* /var/tmp/*     && yum clean all
+#21 CACHED
+
+#22 [tools 1/8] RUN set -ex    && GIT_VERSION=2.42.0    && GIT_TAR_FILE=git-$GIT_VERSION.tar.gz    && GIT_SRC=https://github.com/git/git/archive/v${GIT_VERSION}.tar.gz     && curl -L -o $GIT_TAR_FILE $GIT_SRC    && tar zxf $GIT_TAR_FILE    && cd git-$GIT_VERSION    && make -j4 prefix=/usr    && make install prefix=/usr    && cd .. ; rm -rf git-$GIT_VERSION    && rm -rf $GIT_TAR_FILE /tmp/*
+#22 CACHED
+
+#23 [runtimes_java 2/5] RUN set -x     && yum install -yq java-11-amazon-corretto     && for tool_path in /usr/lib/jvm/java-11-amazon-corretto.aarch64/bin/*; do           tool=`basename $tool_path`;           update-alternatives --install /usr/bin/$tool $tool $tool_path 10000;           update-alternatives --set $tool $tool_path;         done      && rm /usr/lib/jvm/java-11-amazon-corretto.aarch64/lib/security/cacerts && ln -s /etc/pki/java/cacerts /usr/lib/jvm/java-11-amazon-corretto.aarch64/lib/security/cacerts     && curl -LSso /var/tmp/apache-ant-1.10.8-bin.tar.gz https://archive.apache.org/dist/ant/binaries/apache-ant-1.10.8-bin.tar.gz      && echo "4d80dc6ba23eeec7769085ddb00261b7480b596b56c6e69aa221391acbfb7338eb5855179c88222c8021095ef1f64f43caf2b4f90e8305d7c3128026d4258d06 /var/tmp/apache-ant-1.10.8-bin.tar.gz" | sha512sum -c -     && tar -xzf /var/tmp/apache-ant-1.10.8-bin.tar.gz -C /opt     && rm /var/tmp/apache-ant-1.10.8-bin.tar.gz     && update-alternatives --install /usr/bin/ant ant /opt/apache-ant-1.10.8/bin/ant 10000
+#23 CACHED
+
+#24 [openssl 1/2] RUN which openssl
+#24 CACHED
+
+#25 [openssl 2/2] RUN set -ex     && curl -fSL "https://www.openssl.org/source/openssl-3.1.3.tar.gz" -o openssl-3.1.3.tar.gz     && echo "f0316a2ebd89e7f2352976445458689f80302093788c466692fb2a188b2eacf6 openssl-3.1.3.tar.gz" | sha256sum -c -     && mkdir /tmp/openssl     && yum -y install perl-IPC-Cmd     && tar --extract --file openssl-3.1.3.tar.gz --strip-components 1  --directory /tmp/openssl     && cd /tmp/openssl     && ./Configure     && make     && make install
+#25 0.167 + curl -fSL https://www.openssl.org/source/openssl-3.1.3.tar.gz -o openssl-3.1.3.tar.gz
+#25 0.572   % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+#25 0.575                                  Dload  Upload   Total   Spent    Left  Speed
+#25 0.581   0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0 11 14.8M   11 1684k    0     0  1673k      0  0:00:09  0:00:01  0:00:08 1841k 78 14.8M   78 11.6M    0     0  6511k      0  0:00:02  0:00:01  0:00:01 6853k100 14.8M  100 14.8M    0     0  7215k      0  0:00:02  0:00:02 --:--:-- 7549k
+#25 2.630 + sha256sum -c -
+#25 2.632 + echo 'f0316a2ebd89e7f2352976445458689f80302093788c466692fb2a188b2eacf6 openssl-3.1.3.tar.gz'
+#25 2.874 openssl-3.1.3.tar.gz: OK
+#25 2.880 + mkdir /tmp/openssl
+#25 2.920 + yum -y install perl-IPC-Cmd
+#25 5.222 Loaded plugins: ovl, priorities

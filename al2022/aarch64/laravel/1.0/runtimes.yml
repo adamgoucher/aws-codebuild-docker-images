@@ -41,44 +41,92 @@ runtimes:
                 && update-alternatives --install /usr/bin/$tool $tool $tool_path 20000;
               fi;
             done
+  golang:
+    versions:
+      1.12:
+        commands:
+          - echo "Installing Go version 1.12 ..."
+          - rm -rf /usr/local/go
+          - ln -s /usr/local/go12 /usr/local/go
+      1.13:
+        commands:
+          - echo "Installing Go version 1.13 ..."
+          - rm -rf /usr/local/go
+          - ln -s /usr/local/go13 /usr/local/go
+      1.14:
+        commands:
+          - echo "Installing Go version 1.14 ..."
   python:
     versions:
       3.9:
         commands:
           - echo "Installing Python version 3.9 ..."
           - pyenv global  $PYTHON_39_VERSION
+      3.8:
+        commands:
+          - echo "Installing Python version 3.8 ..."
+          - pyenv global  $PYTHON_38_VERSION
+      3.7:
+        commands:
+          - echo "Installing Python version 3.7 ..."
+          - pyenv global  $PYTHON_37_VERSION
   php:
     versions:
       8.2:
         commands:
           - echo "Installing PHP version 8.2 ..."
-          - phpenv global $PHP_82_VERSION
-      8.3:
+          - phpenv global $PHP_74_VERSION
+      8.1:
         commands:
-          - echo "Installing PHP version 8.3 ..."
-          - phpenv global $PHP_83_VERSION
+          - echo "Installing PHP version 8.1 ..."
+          - phpenv global $PHP_74_VERSION
+      8.1:
+        commands:
+          - echo "Installing PHP version 8.0 ..."
+          - phpenv global $PHP_80_VERSION
+      7.4:
+        commands:
+          - echo "Installing PHP version 7.4 ..."
+          - phpenv global $PHP_74_VERSION
+      7.3:
+        commands:
+          - echo "Installing PHP version 7.3 ..."
+          - phpenv global $PHP_73_VERSION
   ruby:
     versions:
-      3.2:
+      2.6:
         commands:
-          - echo "Installing Ruby version 3.2 ..."
-          - rbenv global $RUBY_32_VERSION
+          - echo "Installing Ruby version 2.6 ..."
+          - rbenv global $RUBY_26_VERSION
+      2.7:
+        commands:
+          - echo "Installing Ruby version 2.7 ..."
+          - rbenv global $RUBY_27_VERSION
   nodejs:
     versions:
-      20:
-        commands:
-          - echo "Installing Node.js version 20 ..."
-          - n $NODE_20_VERSION
       18:
         commands:
           - echo "Installing Node.js version 18 ..."
-          - n $NODE_18_VERSION
+          - n $NODE_10_VERSION
       16:
         commands:
           - echo "Installing Node.js version 16 ..."
-          - n $NODE_16_VERSION
+          - n $NODE_12_VERSION
+      14:
+        commands:
+          - echo "Installing Node.js version 14 ..."
+          - n $NODE_12_VERSION
+      12:
+        commands:
+          - echo "Installing Node.js version 12 ..."
+          - n $NODE_12_VERSION
   docker:
     versions:
       19:
         commands:
           - echo "Using Docker 19"
+  dotnet:
+    versions:
+      3.1:
+        commands:
+          - echo "Installing .NET version 3.1 ..."
